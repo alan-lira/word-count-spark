@@ -43,10 +43,15 @@ def parse_word_counter_config(word_counter_config_file: Path) -> List:
                                         "input_file")
     output_directory_path = config_parser.get("Output Settings",
                                               "output_directory")
-    number_of_partitions_for_rdd = int(config_parser.get("General Settings",
-                                                         "number_of_partitions_for_rdd"))
-    counter_config = [input_file_path, output_directory_path, number_of_partitions_for_rdd]
-    return counter_config
+    number_of_map_partitions = int(config_parser.get("General Settings",
+                                                     "number_of_map_partitions"))
+    number_of_reduce_partitions = int(config_parser.get("General Settings",
+                                                        "number_of_reduce_partitions"))
+    word_counter_config = [input_file_path,
+                           output_directory_path,
+                           number_of_map_partitions,
+                           number_of_reduce_partitions]
+    return word_counter_config
 
 
 def parse_spark_application_submission_settings(spark_application_submission_settings_file: Path) -> List:
@@ -98,19 +103,23 @@ def execute_word_count(spark_context: SparkContext,
     input_file_path = word_counter_config[0]
     # Get Output Directory Path
     output_directory_path = word_counter_config[1]
-    # Get Number of Partitions For RDD
-    number_of_partitions_for_rdd = word_counter_config[2]
-    # Step 1. Read The Input Data Using The 'textFile' Function, Generating a RDD;
+    # Get Number of Map Partitions
+    number_of_map_partitions = word_counter_config[2]
+    # Get Number of Reduce Partitions
+    number_of_reduce_partitions = word_counter_config[3]
+    # Step 1. Read The Input Data Using The 'textFile' Function, Generating a RDD
     rdd1 = spark_context.textFile(input_file_path)
-    # Set The Desired Number Of Partitions;
-    rdd1 = repartition_rdd(rdd1, number_of_partitions_for_rdd)
-    # Step 2. Generate a RDD Containing Lists of Words Using The 'flatMap' Function;
+    # Set Number of Map Partitions
+    rdd1 = repartition_rdd(rdd1, number_of_map_partitions)
+    # Step 2. Generate a RDD Containing Lists of Words Using The 'flatMap' Function
     rdd2 = rdd1.flatMap(lambda line: line.split(" "))
-    # Step 3. Generate a RDD Containing Tuples <key, value> = <word, number_of_occurrences=1> Using The 'map' Function;
+    # Step 3. Generate a RDD Containing Tuples <key, value> = <word, number_of_occurrences=1> Using The 'map' Function
     rdd3 = rdd2.map(lambda word: (word, 1))
-    # Step 4. Group Tuples By word And Sum Their Corresponding number_of_occurrences Using The 'reduceByKey' Function;
+    # Set Number of Reduce Partitions
+    rdd3 = repartition_rdd(rdd3, number_of_reduce_partitions)
+    # Step 4. Group Tuples By word And Sum Their Corresponding number_of_occurrences Using The 'reduceByKey' Function
     rdd4 = rdd3.reduceByKey(lambda a, b: a + b)
-    # Step 5. Write The Resulting RDD as Text File Using The 'saveAsTextFile' Function.
+    # Step 5. Write The Resulting RDD as Text File Using The 'saveAsTextFile' Function
     rdd4.saveAsTextFile(output_directory_path)
 
 
